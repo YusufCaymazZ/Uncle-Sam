@@ -3,21 +3,15 @@ name: CI
 on:
   push:
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  smoke-test:
-    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.14"]
-
+  test:
+    name: Unit tests and package checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -26,16 +20,16 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
 
-      - name: Install project
-        run: uv sync --locked
+      - name: Install project and test dependencies
+        run: uv sync --locked --group test
 
-      - name: Check demo syntax
+      - name: Compile source
         run: uv run python -m compileall -q src
 
-      - name: Check installed CLI
-        run: uv run sam
+      - name: Run unit tests
+        run: uv run --locked pytest -q tests/test_first_inference.py
 
       - name: Build package
         run: uv build

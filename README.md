@@ -57,16 +57,22 @@ git submodule update --init --recursive
 ### 2. Set up the environment
 
 ```bash
-uv sync --locked
+uv sync --locked --group demo
 ```
 
-The root project does not yet declare the inference demo's runtime dependencies. Follow [SAM 2's installation instructions](https://github.com/facebookresearch/sam2#installation) to install a PyTorch build that matches your hardware, then install the submodule into the project's environment:
+The `demo` dependency group installs NumPy and the OpenCV GUI build used by the interactive script. Follow [SAM 2's installation instructions](https://github.com/facebookresearch/sam2#installation) to install a PyTorch build that matches your hardware, then install the submodule into the project's environment:
 
 ```bash
 uv pip install -e ./sam2
 ```
 
 Check SAM 2's compatibility notes if your Python or PyTorch version is not supported by the current upstream release.
+
+For development and standard CI checks, use the separate lightweight test dependency group (it uses headless OpenCV so automated tests cannot open GUI windows):
+
+```bash
+uv sync --locked --group test
+```
 
 ### 3. Add model and image files
 
@@ -127,9 +133,30 @@ Edit those constants in the script to use a different image, checkpoint, or outp
 
 ## ✅ Continuous integration
 
-GitHub Actions runs a smoke-test workflow on pushes and pull requests across Ubuntu, macOS, and Windows with Python 3.14. It installs the project, checks Python syntax, runs the installed `sam` command, and builds the package.
+GitHub Actions runs CPU-only checks on every push and pull request. The fast CI job installs the project and test dependencies with `uv`, compiles `src`, runs unit tests with mocked predictors, and builds the package. SAM 2 imports are checked when the submodule and its dependencies are available; normal CI does not download the submodule or model weights.
 
-The workflow does not download the SAM 2 checkpoint or test model inference: those files are large, and inference depends on the local PyTorch/device setup and a graphical session. Follow the setup steps above to install SAM 2 and run the interactive demo on your machine.
+Actual SAM 2.1 inference is a separate, manually triggered workflow. It checks out the SAM 2 submodule, installs CPU PyTorch, downloads and caches the official SAM 2.1 Small checkpoint, then runs inference against a tiny synthetic image fixture. It has a 45-minute timeout; if the checkpoint download is unavailable, the inference step is clearly skipped. CPU execution is used when CUDA is unavailable, so no GPU is required.
+
+The fixture at `tests/fixtures/sam2_smoke.ppm` is a small synthetic image created for this project. The local `data/Test/Rural/images_png/4191.png` image is excluded by `.gitignore`; no license or redistribution terms for that dataset image were available to verify, so it is not copied into the repository or CI.
+
+The model checkpoint is never committed. The manual workflow downloads it from Meta's [official SAM 2.1 Small checkpoint URL](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt) and caches it between runs. SAM 2 source is maintained under Meta's [Apache 2.0 license](https://github.com/facebookresearch/sam2/blob/main/LICENSE); review the upstream terms for the checkpoint and give attribution to Meta AI and the [SAM 2 project](https://github.com/facebookresearch/sam2).
+
+Run the same lightweight checks locally:
+
+```bash
+uv sync --locked --group test
+uv run python -m compileall -q src
+uv run --locked pytest -q tests/test_first_inference.py
+uv build
+```
+
+To run actual inference locally, initialize the submodule, install the CPU or hardware-appropriate PyTorch build and SAM 2 as described above, download the official checkpoint to `sam2/checkpoints/sam2.1_hiera_small.pt`, and run:
+
+```bash
+uv run --locked --no-sync pytest -q tests/integration/test_sam2_inference.py
+```
+
+The integration test skips with a clear message if its checkpoint is missing. The interactive desktop demo remains available via the launch command above and is not opened by automated tests.
 
 ## 🙏 Acknowledgements
 

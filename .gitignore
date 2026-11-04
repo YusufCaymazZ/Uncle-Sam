@@ -11,7 +11,11 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
+build/
+dist/
+*.egg-info/
 
 # ==============================
 # Virtual environments
@@ -26,6 +30,7 @@ ENV/
 # ==============================
 .vscode/
 .idea/
+.fleet/
 *.swp
 *.swo
 .DS_Store
@@ -87,5 +92,8 @@ annotations/generated/
 *.log
 *.tmp
 *.temp
+*.part
+*.bak
 tmp/
 temp/
+.cache/
