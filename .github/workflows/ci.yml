@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit tests and package checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Install project and test dependencies
+        run: uv sync --locked --group test
+
+      - name: Compile source
+        run: uv run python -m compileall -q src
+
+      - name: Run unit tests
+        run: uv run --locked pytest -q tests/test_first_inference.py
+
+      - name: Build package
+        run: uv build

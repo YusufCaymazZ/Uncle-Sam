@@ -1,0 +1,73 @@
+name: SAM 2.1 integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inference:
+    name: CPU inference smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SAM2_CHECKPOINT_PATH: ${{ github.workspace }}/.cache/sam2/sam2.1_hiera_small.pt
+      SAM2_CPU_THREADS: "2"
+
+    steps:
+      - name: Check out repository and SAM 2 submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Install project and test dependencies
+        run: uv sync --locked --group test
+
+      - name: Install CPU PyTorch and SAM 2
+        env:
+          SAM2_BUILD_CUDA: "0"
+        run: |
+          uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --python .venv/bin/python -e ./sam2
+
+      - name: Cache SAM 2.1 Small checkpoint
+        id: checkpoint-cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/sam2/sam2.1_hiera_small.pt
+          key: sam2.1-hiera-small-092824-v1
+
+      - name: Download official SAM 2.1 Small checkpoint
+        id: checkpoint
+        shell: bash
+        run: |
+          checkpoint=".cache/sam2/sam2.1_hiera_small.pt"
+          mkdir -p "$(dirname "$checkpoint")"
+          if [[ -s "$checkpoint" ]]; then
+            echo "Using cached SAM 2.1 Small checkpoint."
+          elif curl --fail --location --retry 2 --connect-timeout 20 --max-time 1200 \
+            https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt \
+            --output "$checkpoint.part"; then
+            mv "$checkpoint.part" "$checkpoint"
+          else
+            rm -f "$checkpoint.part"
+            echo "::warning::Checkpoint download failed; skipping optional model inference."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run real SAM 2.1 inference
+        if: steps.checkpoint.outputs.available == 'true'
+        run: uv run --locked pytest -q tests/integration/test_sam2_inference.py
+
+      - name: Report skipped inference
+        if: steps.checkpoint.outputs.available != 'true'
+        run: echo "SAM 2.1 inference was skipped because the official checkpoint is unavailable."

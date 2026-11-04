@@ -9,9 +9,25 @@ authors = [
 requires-python = ">=3.14"
 dependencies = []
 
+[dependency-groups]
+demo = [
+    "numpy>=2.2",
+    "opencv-python>=4.10",
+]
+test = [
+    "numpy>=2.2",
+    "opencv-python-headless>=4.10",
+    "pytest>=8.3",
+]
+
 [project.scripts]
 sam = "sam:main"
 
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"
