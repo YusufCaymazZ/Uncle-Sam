@@ -146,7 +146,7 @@ Run the same lightweight checks locally:
 ```bash
 uv sync --locked --group test
 uv run python -m compileall -q src
-uv run --locked pytest -q tests/test_first_inference.py
+uv run --locked pytest -q tests/unit/test_first_inference.py
 uv build
 ```
 
