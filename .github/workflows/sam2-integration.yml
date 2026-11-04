@@ -21,6 +21,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify integration image
+        run: test -s test-data/4191.png
+
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v6
         with:
@@ -36,6 +39,15 @@ jobs:
         run: |
           uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cpu
           uv pip install --python .venv/bin/python -e ./sam2
+
+      - name: Verify Python and model dependencies
+        run: >-
+          uv run --locked --no-sync python -c
+          "import sys, cv2, torch, torchvision;
+          from sam2.build_sam import build_sam2;
+          assert sys.version_info >= (3, 14);
+          print(f'Python {sys.version.split()[0]}, torch {torch.__version__},
+          torchvision {torchvision.__version__}, OpenCV {cv2.__version__}')"
 
       - name: Cache SAM 2.1 Small checkpoint
         id: checkpoint-cache
@@ -55,19 +67,18 @@ jobs:
           elif curl --fail --location --retry 2 --connect-timeout 20 --max-time 1200 \
             https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt \
             --output "$checkpoint.part"; then
-            mv "$checkpoint.part" "$checkpoint"
+            if [[ -s "$checkpoint.part" ]]; then
+              mv "$checkpoint.part" "$checkpoint"
+            else
+              rm -f "$checkpoint.part"
+              echo "::error::Checkpoint download produced an empty file."
+              exit 1
+            fi
           else
             rm -f "$checkpoint.part"
-            echo "::warning::Checkpoint download failed; skipping optional model inference."
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::Checkpoint download failed; real SAM 2.1 inference cannot run."
+            exit 1
           fi
-          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Run real SAM 2.1 inference
-        if: steps.checkpoint.outputs.available == 'true'
-        run: uv run --locked pytest -q tests/integration/test_sam2_inference.py
-
-      - name: Report skipped inference
-        if: steps.checkpoint.outputs.available != 'true'
-        run: echo "SAM 2.1 inference was skipped because the official checkpoint is unavailable."
+        run: uv run --locked --no-sync pytest -q tests/integration/test_sam2_inference.py

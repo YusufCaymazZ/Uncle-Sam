@@ -82,10 +82,10 @@ Put the SAM 2.1 Small checkpoint here:
 sam2/checkpoints/sam2.1_hiera_small.pt
 ```
 
-Put the input image here:
+The input image is stored in the repository here:
 
 ```text
-data/Test/Rural/images_png/4191.png
+test-data/4191.png
 ```
 
 ### 4. Launch the demo
@@ -114,7 +114,7 @@ The demo selects the highest-scoring mask from SAM's predictions. The saved over
 │   ├── sam/__init__.py             # Starter `sam` CLI entry point
 │   └── segmentation/
 │       └── first_inference.py      # Interactive SAM 2.1 image demo
-├── data/Test/Rural/images_png/     # Expected input image location
+├── test-data/4191.png              # Tracked integration/demo input image
 └── outputs/                        # Created for saved inference overlays
 ```
 
@@ -124,7 +124,7 @@ The demo's paths and model settings are currently defined in `src/segmentation/f
 
 | Setting | Default |
 |:--|:--|
-| Input image | `data/Test/Rural/images_png/4191.png` |
+| Input image | `test-data/4191.png` |
 | Checkpoint | `sam2/checkpoints/sam2.1_hiera_small.pt` |
 | Model config | `configs/sam2.1/sam2.1_hiera_s.yaml` from the SAM 2 submodule |
 | Saved overlay | `outputs/sam2_first_inference.png` |
@@ -135,9 +135,9 @@ Edit those constants in the script to use a different image, checkpoint, or outp
 
 GitHub Actions runs CPU-only checks on every push and pull request. The fast CI job installs the project and test dependencies with `uv`, compiles `src`, runs unit tests with mocked predictors, and builds the package. SAM 2 imports are checked when the submodule and its dependencies are available; normal CI does not download the submodule or model weights.
 
-Actual SAM 2.1 inference is a separate, manually triggered workflow. It checks out the SAM 2 submodule, installs CPU PyTorch, downloads and caches the official SAM 2.1 Small checkpoint, then runs inference against a tiny synthetic image fixture. It has a 45-minute timeout; if the checkpoint download is unavailable, the inference step is clearly skipped. CPU execution is used when CUDA is unavailable, so no GPU is required.
+Actual SAM 2.1 inference is a separate, manually triggered workflow. It checks out the SAM 2 submodule, installs CPU-only PyTorch, verifies the Python and model dependencies, downloads and caches the official SAM 2.1 Small checkpoint, then runs inference against `test-data/4191.png`. A missing image or failed checkpoint download fails the workflow rather than reporting a successful skipped integration test. CPU execution is used when CUDA is unavailable, so no GPU is required.
 
-The fixture at `tests/fixtures/sam2_smoke.ppm` is a small synthetic image created for this project. The local `data/Test/Rural/images_png/4191.png` image is excluded by `.gitignore`; no license or redistribution terms for that dataset image were available to verify, so it is not copied into the repository or CI.
+The integration image is tracked at `test-data/4191.png`; the larger `data/` dataset remains excluded by `.gitignore`. Standard CI verifies that the image is present after checkout but does not download model weights or run real inference.
 
 The model checkpoint is never committed. The manual workflow downloads it from Meta's [official SAM 2.1 Small checkpoint URL](https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt) and caches it between runs. SAM 2 source is maintained under Meta's [Apache 2.0 license](https://github.com/facebookresearch/sam2/blob/main/LICENSE); review the upstream terms for the checkpoint and give attribution to Meta AI and the [SAM 2 project](https://github.com/facebookresearch/sam2).
 
@@ -150,13 +150,23 @@ uv run --locked pytest -q tests/test_first_inference.py
 uv build
 ```
 
-To run actual inference locally, initialize the submodule, install the CPU or hardware-appropriate PyTorch build and SAM 2 as described above, download the official checkpoint to `sam2/checkpoints/sam2.1_hiera_small.pt`, and run:
+To run actual CPU inference locally, initialize the submodule and install the CPU-only PyTorch build and SAM 2:
 
 ```bash
-uv run --locked --no-sync pytest -q tests/integration/test_sam2_inference.py
+git submodule update --init --recursive
+uv sync --locked --group test
+uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cpu
+SAM2_BUILD_CUDA=0 uv pip install --python .venv/bin/python -e ./sam2
+mkdir -p .cache/sam2
+curl --fail --location --retry 2 \
+  https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt \
+  --output .cache/sam2/sam2.1_hiera_small.pt
+SAM2_CHECKPOINT_PATH="$PWD/.cache/sam2/sam2.1_hiera_small.pt" \
+SAM2_CPU_THREADS=2 \
+  uv run --locked --no-sync pytest -q tests/integration/test_sam2_inference.py
 ```
 
-The integration test skips with a clear message if its checkpoint is missing. The interactive desktop demo remains available via the launch command above and is not opened by automated tests.
+The integration test fails if its checkpoint is missing. It uses headless OpenCV and does not open GUI windows; the interactive desktop demo remains available via the launch command above.
 
 ## 🙏 Acknowledgements
 

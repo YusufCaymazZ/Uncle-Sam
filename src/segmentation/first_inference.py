@@ -6,7 +6,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 SAM2_ROOT = ROOT / "sam2"
-IMAGE_PATH = ROOT / "data/Test/Rural/images_png/4191.png"
+IMAGE_PATH = ROOT / "test-data" / "4191.png"
 CHECKPOINT = SAM2_ROOT / "checkpoints/sam2.1_hiera_small.pt"
 MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_s.yaml"
 OUTPUT_PATH = ROOT / "outputs/sam2_first_inference.png"

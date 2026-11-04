@@ -16,6 +16,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Verify integration image is available after checkout
+        run: test -s test-data/4191.png
+
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v6
         with:
